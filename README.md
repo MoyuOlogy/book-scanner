@@ -1,6 +1,6 @@
 # 📚 书籍信息录入系统
 
-可以外接扫码枪扫描条形码，自动查询书籍信息并保存到本地的录入系统。
+扫码枪扫描条形码，自动查询书籍信息并保存到本地的录入系统。
 
 ![Python](https://img.shields.io/badge/Python-3.x-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -8,7 +8,7 @@
 ## 功能
 
 - **扫码枪扫描** — 扫描 ISBN 条形码，自动查询书籍信息
-- **多源查询** — dushu.com → douban → Google Books → Open Library，逐级兜底
+- **多源查询** — 读书网 → 豆瓣 → Google Books → Open Library，逐级兜底
 - **实时本地存储** — 数据保存到 `data/books.json` 文件，不依赖浏览器缓存
 - **手动录入** — 支持手动填写/编辑书籍信息
 - **搜索** — 按书名、作者、ISBN、出版社搜索
@@ -18,9 +18,9 @@
 
 | 优先级 | 数据源 | 说明 |
 |--------|--------|------|
-| 1 | dushu.com | 信息全 |
-| 2 | douban | 反爬较严 |
-| 3 | Google Books | 国际书籍 |
+| 1 | 读书网 (dushu.com) | 国内中文书籍，反爬宽松，信息全 |
+| 2 | 豆瓣 (douban.com) | 中文书籍丰富，反爬较严 |
+| 3 | Google Books | 国际书籍，需外网访问 |
 | 4 | Open Library | 开放图书馆，信息可能不全 |
 
 ## 项目结构
@@ -78,6 +78,13 @@ http://localhost:3000
 | POST | `/api/books` | 新增/更新书籍 |
 | DELETE | `/api/books/:id` | 删除书籍 |
 | GET | `/api/book/:isbn` | 查询 ISBN 对应的书籍信息 |
+
+## 相关项目
+
+| 版本 | 地址 | 说明 |
+|------|------|------|
+| 本地 + 网页版 | https://github.com/MoyuOlogy/book-scanner | 当前项目，Python 后端 + 浏览器前端 |
+| 微信小程序版 | https://github.com/MoyuOlogy/mini-bookscanner | 微信小程序 + 腾讯云开发 |
 
 ## 数据备份
 
