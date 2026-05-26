@@ -63,7 +63,8 @@
     try {
       const bookInfo = await fetchBookInfo(cleanISBN);
       showBookForm(cleanISBN, bookInfo);
-      const source = bookInfo.source === 'douban' ? '豆瓣' : 'Google Books';
+      const sourceMap = { dushu: '读书网', douban: '豆瓣', google: 'Google Books' };
+      const source = sourceMap[bookInfo.source] || bookInfo.source;
       scanStatus.textContent = `✓ 查询成功（${source}），请确认信息`;
       showToast('书籍信息已获取');
     } catch (err) {
@@ -77,14 +78,29 @@
 
   async function fetchBookInfo(isbn) {
     try {
-      return await fetchFromDouban(isbn);
+      return await fetchFromDushu(isbn);
     } catch (e) {
       try {
-        return await fetchFromGoogleBooks(isbn);
+        return await fetchFromDouban(isbn);
       } catch (e2) {
-        return await fetchFromOpenLibrary(isbn);
+        try {
+          return await fetchFromGoogleBooks(isbn);
+        } catch (e3) {
+          return await fetchFromOpenLibrary(isbn);
+        }
       }
     }
+  }
+
+  async function fetchFromDushu(isbn) {
+    const resp = await fetch(`${LOCAL_API}/${isbn}`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || '读书网查询失败');
+    }
+    const data = await resp.json();
+    if (data.source !== 'dushu') throw new Error('非读书网数据');
+    return data;
   }
 
   async function fetchFromDouban(isbn) {
@@ -93,7 +109,9 @@
       const err = await resp.json().catch(() => ({}));
       throw new Error(err.error || '豆瓣查询失败');
     }
-    return await resp.json();
+    const data = await resp.json();
+    if (data.source !== 'douban') throw new Error('非豆瓣数据');
+    return data;
   }
 
   async function fetchFromGoogleBooks(isbn) {

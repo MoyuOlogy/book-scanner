@@ -14,9 +14,13 @@ DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'bo
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Referer': 'https://book.douban.com/',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+}
+
+DOUBAN_HEADERS = {
+    **HEADERS,
+    'Referer': 'https://book.douban.com/',
 }
 
 
@@ -124,19 +128,81 @@ class BookHandler(SimpleHTTPRequestHandler):
 
     def handle_book_query(self, isbn):
         try:
-            detail_url = self.search_douban(isbn)
-            if not detail_url:
-                self.send_json(404, {'error': '豆瓣未收录该ISBN'})
-                return
-            book_info = self.fetch_detail(detail_url)
-            book_info['source'] = 'douban'
+            book_info = self.fetch_from_dushu(isbn)
+            book_info['source'] = 'dushu'
             self.send_json(200, book_info)
-        except Exception as e:
-            self.send_json(500, {'error': f'查询失败: {str(e)}'})
+        except Exception:
+            try:
+                detail_url = self.search_douban(isbn)
+                if not detail_url:
+                    self.send_json(404, {'error': '所有数据源均未找到该书籍'})
+                    return
+                book_info = self.fetch_detail(detail_url)
+                book_info['source'] = 'douban'
+                self.send_json(200, book_info)
+            except Exception as e:
+                self.send_json(500, {'error': f'查询失败: {str(e)}'})
+
+    def fetch_from_dushu(self, isbn):
+        url = f'https://www.dushu.com/search.aspx?qd={isbn}'
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        html = resp.text
+
+        match = re.search(r'href="/book/(\d+)/', html)
+        if not match:
+            raise Exception('未找到')
+
+        detail_url = f'https://www.dushu.com/book/{match.group(1)}/'
+        resp = requests.get(detail_url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        html = resp.text
+
+        title_match = re.search(r'<div class="book-title"><h1>([^<]+)</h1>', html)
+        title = title_match.group(1).strip() if title_match else ''
+
+        author_match = re.search(r'作\s*者[：:]</td>\s*<td>([^<]+)</td>', html)
+        author = author_match.group(1).strip() if author_match else ''
+
+        pub_match = re.search(r'出版社[：:]</td>\s*<td>([^<]+)</td>', html)
+        publisher = pub_match.group(1).strip() if pub_match else ''
+
+        date_match = re.search(r'出版时间[：:]</td>\s*<td[^>]*>([^<]+)</td>', html)
+        publish_date = date_match.group(1).strip() if date_match else ''
+
+        price_match = re.search(r'定\s*价[：:]\s*<span[^>]*>[¥￥]?([\d.]+)', html)
+        price = price_match.group(1) if price_match else ''
+
+        pages_match = re.search(r'页\s*数[：:]</td>\s*<td[^>]*>(\d+)', html)
+        pages = pages_match.group(1) if pages_match else ''
+
+        desc_match = re.search(r'<div class="text txtsummary">([\s\S]*?)</div>', html)
+        description = ''
+        if desc_match:
+            description = re.sub(r'<[^>]+>', '', desc_match.group(1))
+            description = re.sub(r'&[a-z]+;', '', description)
+            description = re.sub(r'\s+', ' ', description).strip()
+
+        category = ''
+        crumbs_match = re.search(r'当前位置[：:]\s*([\s\S]*?)<span', html)
+        if crumbs_match:
+            crumbs = re.sub(r'<[^>]+>', '', crumbs_match.group(1))
+            parts = re.split(r'\s*[>|]\s*', crumbs)
+            if len(parts) > 2:
+                category = ', '.join(c for c in parts[1:-1] if c and c not in ('首页', '出版图书'))
+
+        if not title:
+            raise Exception('未获取到书名')
+
+        return {
+            'title': title, 'author': author, 'publisher': publisher,
+            'publishDate': publish_date, 'pages': pages, 'price': price,
+            'category': category, 'description': description,
+        }
 
     def search_douban(self, isbn):
         url = f'https://search.douban.com/book/subject_search?search_text={isbn}&cat=1001'
-        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp = requests.get(url, headers=DOUBAN_HEADERS, timeout=10)
         resp.raise_for_status()
         html = resp.text
         match = re.search(r'https://book\.douban\.com/subject/(\d+)', html)
@@ -149,7 +215,7 @@ class BookHandler(SimpleHTTPRequestHandler):
         return None
 
     def fetch_detail(self, url):
-        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp = requests.get(url, headers=DOUBAN_HEADERS, timeout=10)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, 'html.parser')
 
